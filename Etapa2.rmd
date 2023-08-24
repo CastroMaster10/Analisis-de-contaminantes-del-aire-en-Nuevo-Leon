@@ -1,0 +1,231 @@
+---
+title: "Reto Etapa 2"
+author: "Ruben Dario Castro Terrazas"
+date: "2023-08-21"
+output: word_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+# Importar librerias y dependencias
+
+```{r}
+library(readxl)
+library(Hmisc)
+library(gridExtra)
+library(ggplot2)
+library(corrplot)
+```
+
+# Etapa I
+
+# Etapa II: Comprensión y preparación de los datos
+
+Para dirigir la solución al reto, seguirás la metodología CRISP-DM. En esta primera actividad realizarás el segundo paso Comprensión y Preparación de los datos que permitirá añadir el análisis descriptivo e introductorio de las variables.
+
+## 1) Comprensión de los datos del negocio
+
+### Importar base de datos
+
+```{r warning=FALSE}
+sheet_names = excel_sheets("datos2022_2023_estaciones.xlsx")
+
+for (i in 1:length(sheet_names)) {
+  variable_name = paste("M",sheet_names[i],sep="_")
+  value = read_excel("datos2022_2023_estaciones.xlsx",sheet = sheet_names[i])
+  assign(variable_name,value) #guardamos cada hoja en una variable
+}
+```
+
+Lo que se hizo en el código de arriba fue guardar los datos de cada estación en una variable. Por fines prácticos utilizaremos solamente una de ellas para realizar el análisis descriptivo de esta entrega.
+
+### A Dimensión del dataset
+
+```{r}
+cat("Número de observaciones:",dim(M_CENTRO)[1])
+cat("\nNúmero de variables:",dim(M_CENTRO)[2])
+```
+### Describe claramente cada una de las variables, incluyendo su nombre, descripción, tipo (categórico/Numérico) y valores posibles que puede tomar, valores nulos.
+
+```{r}
+cat("Tipo dato de cada variable\n")
+t(sapply(M_CENTRO,class))
+```
+```{r}
+summary(M_CENTRO)
+```
+Si observamos a simple vista la tabla hecha por la función summary(), inicialmente vemos que las variables que deberían catalogarse como cuantitativas se identifican como carateres, lo cual no resulta eficiente para hacer un analisis estadistico y descriptivo. Para solucionar esto, transformaremos los datos de las variables para que sean numéricos.
+
+### Transformación a variables numéricas
+
+```{r warning=FALSE}
+variables_names = colnames(M_CENTRO)
+M_CENTRO[,2:length(variables_names)] = sapply(M_CENTRO[,2:length(variables_names)],as.numeric)
+t(sapply(M_CENTRO,class))
+```
+```{r}
+cat("Valores únicos por cada variable\n")
+for (i in 1:length(variables_names)) {
+cat("\n-",variables_names[i],":",length(unique(sapply(M_CENTRO [,i],as.list)))) #Transformamos las columnas a vectores para poder calcular sus valores únicos
+}
+```
+
+```{r}
+cat("\nNúmero de valores nulos (NA) por variable")
+for (i in 1:length(variables_names)){
+  cat(cat("\n-",variables_names[i],":",length(which(is.na(M_CENTRO[,i]),arr.ind=TRUE))))
+}
+```
+
+
+### Exploración de los datos
+
+1. Variables cuantitativas
+
+   - Medidas de posición no-central: cuartiles, outlier (valores atípicos), boxplots
+   
+```{r}
+summary(M_CENTRO)
+```
+```{r}
+#Desviacion estandar por variable
+cat("Desviacion estandar por variable")
+for (i in 1:length(variables_names)) {
+cat(cat("\n-",variables_names[i],":",sapply(M_CENTRO[,i],var)))
+}
+```
+Vemos que obtenemos "NA"s o "valores faltantes" cuando tratamos de obtener la desviación estándar de cada variable-a excepción de la variable de fecha ya que esa es categórica y no aporta valor al análisis. Esto se debe principalmente a que R no acepta valores faltantes al calcular la desviación estandar o la varianza por cada columna. Mucho del análisis requiere que no haya valores faltantes, por lo que haremos una limpieza de ellos para seguir con el análisis de exploración.
+
+```{r}
+#Tratamiento de valores faltantes
+M_CENTRO = na.exclude(M_CENTRO)
+```
+
+```{r}
+#Desviacion estandar por variable
+cat("Desviacion estandar por variable")
+for (i in 1:length(variables_names)) {
+cat(cat("\n-",variables_names[i],":",sapply(M_CENTRO[,i],var)))
+}
+```
+
+Ahora, trataremos de detectar los outliers o valores atípicos dentro de los datos de la estación central (M_CENTRO) calculando los rangos intercuartílicos (IQR) de cada variable.
+
+
+```{r}
+#Detección de datos atípicos al calcular los límites de los valores atípicos utilizando IQR
+
+outliers_table = data.frame()
+
+
+q1 <- quantile(M_CENTRO$CO, 0.25)
+q3 = quantile(M_CENTRO$CO,0.75)
+iqr = q3 - q1
+lowerLimit = q1 - 1.5 * iqr
+upperLimit = q3 + 1.5 * iqr
+variable_name = paste("outliers",variables_names[i],sep="_")
+outliers <- M_CENTRO[M_CENTRO$CO < lowerLimit | M_CENTRO$CO > upperLimit,]
+outliers
+
+
+
+```
+
+   - Análisis de distribución de los datos (Histogramas). Identificar si tiene forma simétrica o asimétrica
+
+```{r}
+#Histograma
+#hist_list = list()
+#par(mfrow = c(4,4))
+#for (i in 2:length(variables_names)) {
+    #hist_plot = ggplot(M_CENTRO, aes(x = M_CENTRO[,i])) +
+    #geom_histogram(binwidth = 0.5, fill = "blue", color = "black", alpha = 0.7) +
+    #labs(title = paste("Histogram for", variables_names[i]))
+    
+    # Agregamos los histogramas a la lista
+  #hist_list[[variables_names[i]]] <- hist_plot
+#}
+
+#grid.arrange(grobs = hist_list, ncol = 15)
+for (i in 2:length(variables_names)) {
+hist(M_CENTRO[,i], main="Distribución de datos", xlab="Valores", ylab="Frecuencia")
+}
+```
+
+A simple vista, podemos deducir que la mayoría de las variables cauntitativas tienen un sesgo hacia la derecha, a excepción de variables como "PRS","RH",y "TOUT".
+
+```{r}
+#Diagramas de caja y bigotes
+
+for (i in 2:length(variables_names)) {
+boxplot(M_CENTRO[,i], main="Gráfico de densidad", xlab="Valores", ylab="Frecuencia")
+}
+
+
+```
+
+```{r}
+#qqnorm(M_CENTRO[,2:length(variables_names)])
+```
+
+   - Análisis de correlación  de los datos, mapa de calor
+   
+```{r}
+cor_matrix = cor(M_CENTRO[,2:length(variables_names)])
+cor_matrix
+```
+
+```{r}
+# Visualiza la matriz de correlación utilizando corrplot
+corrplot(cor_matrix, method = "circle")
+```
+Observamos que
+   
+2. Variables categóricas
+   - Distribución de los datos (diagramas de barras, diagramas de pastel)
+   
+   En este caso nadamas tenemos una variable categórica, la cual el la variable "date", por lo que no tiene mucho caso analizar esta misma
+
+### Verificación de datos
+
+1. Valores faltantes
+
+Como ya se vió anteriormente
+```{r}
+
+```
+
+2. Valores de los datos
+3. Ortografía
+
+## Preparación de los datos
+
+### 1) Selecciona el conjunto de datos a utilizar
+
+a) Decide qué conjunto de datos se utilizará. Explica por qué se incluyeron o excluyeron ciertos datos.
+
+b)  Identifica columna objetivo
+
+### 2) Limpieza de datos
+
+a) Elimina duplicados
+
+b) Corrige valores érroneos
+
+c) Maneja valores faltantes
+
+d) Maneja datos categóricos: Transforma a datos numéricos si es necesario.
+
+e) Maneja adecuadamente los valores atípicos (outliers) que encuentres en el dataset.
+
+### Transformación de Datos
+
+a) Revisa si es necesario discretizar los datos (binning)
+
+b) Si es necesario escala y normaliza los datos.
+
+c) Construye atributos si es conveniente (atributos derivados).
+
